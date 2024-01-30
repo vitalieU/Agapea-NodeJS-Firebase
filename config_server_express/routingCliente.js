@@ -1,8 +1,16 @@
-const routingCliente=require('./routingCliente');
+//modulo de node para definir endpoints zona cliente con sus respectivas funciones middleware para su procesamiento
+//se meten en objeto router y se exporta este objeto router:
+const express=require('express');
 
-module.exports=function(servExpress){
+const router=express.Router(); //<----- objeto router a exportar...
 
-    servExpress.use('/api/Cliente', routingCliente); //<---- en modulo routingCliente estan endpoints zona cliente
-                                                    // en este fichero se exporta objeto de express tipo router
+const clienteController=require('../controllers/clienteController');
 
-} 
+
+//añado endpoints y funciones middleware a ese objeto router importardas desde un objeto javascript q funciona como si fuese un "controlador":
+router.post('/Login', clienteController.login);
+router.post('/Registro', clienteController.registro);
+router.get('/ComprobarEmail', clienteController.comprobarEmail); //<---- en url, hay variable: ?email=....
+router.get('/ActivarEmail', clienteController.activarCuenta);
+
+module.exports=router;

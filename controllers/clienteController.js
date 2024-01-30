@@ -1,84 +1,192 @@
+//para inicializar firebase:  https://firebase.google.com/docs/web/setup?authuser=0&hl=es#add-sdks-initialize
 const {initializeApp}=require('firebase/app');
-const app=initializeApp(JSON.parse(process.env.FIREBASE_CONFIG));
-const {getAuth,signInWithEmailAndPassword,createUserWithEmailAndPassword, sendEmailVerification}=require('firebase/auth');
-const auth=getAuth(app); //servicio de accesio a firebase-authentication
+//OJO!! nombre variable donde se almacena la cuenta de acceso servicio firebase: FIREBASE_CONFIG (no admite cualquier nombre)
+//no meter el json aqui en fichero de codigo fuente como dice la doc...
+const app = initializeApp(JSON.parse(process.env.FIREBASE_CONFIG));
+
+//------------ CONFIGURACION ACCESO:  FIREBASE-AUTHENTICATION -------------
+const {getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, checkActionCode, applyActionCode}=require('firebase/auth');
+
+const auth=getAuth(app); //<--- servicio de acceso a firebase-authentication
+
+//------------ CONFIGURACION ACCESO:  FIREBASE-DATABASE -------------------
+const {getFirestore, getDocs, collection, where, query, addDoc, getDoc}=require('firebase/firestore');
+
+const db=getFirestore(app); //<---- servicio de acceso a todas las colecciones de la BD definida en firebase-database
 
 
-const {getFirestore,doc,setDoc, getDoc}=require('firebase/firestore');
 
-const db=getFirestore(app); //servicio de acceso a firebase-firestore
 module.exports={
+    login: async (req, res, next)=>{
+        try {
+            console.log('datos mandados por servicio de angular...', req.body); //{email: ..., password: ....}
+        
+            //1º inicio de sesion en FIREBASE con email y password:
+            // https://firebase.google.com/docs/auth/web/password-auth?authuser=0&hl=es#sign_in_a_user_with_an_email_address_and_password
+            let _userCredential=await signInWithEmailAndPassword(auth, req.body.email, req.body.password);
+            //console.log('resultado del login en firebase ....', _userCredential);
+
+            //2º recuperar de la bd de firebase-firestore de la coleccion clientes los datos del cliente asociados al email de la cuenta
+            //y almacenar el JWT q firebase a originado por nosotros 
+            //https://firebase.google.com/docs/firestore/query-data/get-data?hl=es&authuser=0#get_multiple_documents_from_a_collection
+            let _clienteSnapShot=await getDocs( query(collection(db,'clientes'),where('cuenta.email','==',req.body.email)) );
+            //console.log('snapshot recuperado de clientes...', _clienteSnapShot);
+                
+            let _datoscliente=_clienteSnapShot.docs.shift().data();
+            console.log('datos del clietne recuperados...', _datoscliente);
+
+            res.status(200).send(
+                {
+                    codigo: 0,
+                    mensaje: 'login oks...',
+                    errores: null,
+                    datoscliente: _datoscliente,
+                    token: await _userCredential.user.getIdToken(),
+                    otrosdatos: null
+                }
+            );
+
+        } catch (error) {
+            console.log('error en el login....', error);
+            res.status(400).send(
+                                    {
+                                        codigo: 1,
+                                        mensaje:'login fallido',
+                                        error: error.message,
+                                        datoscliente:null,
+                                        token:null,
+                                        otrosdatos:null
+                                    }
+                                );
+        }
+    },
+    registro: async (req,res,next)=>{ 
+        try {
+            console.log('datos recibidos por el servicio de angular desde comp.registro...', req.body);
+            
+
+            //1º creacion de una cuenta FIREBASE dentro de Authentication basada en email y contraseña:
+            //https://firebase.google.com/docs/auth/web/password-auth?authuser=0&hl=es#create_a_password-based_account
+            let _userCredential=await createUserWithEmailAndPassword(auth, req.body.email, req.body.password);
+            console.log('resultado creacion creds. usuario  recien registrado....', _userCredential);
+
+            //2º mandamos email de activacion de cuenta:
+            await sendEmailVerification(_userCredential.user);
+
+            //3º almacenamos los datos del cliente (nombre, apellidos, ...) en coleccion clientes de firebase-database
+            //https://firebase.google.com/docs/firestore/manage-data/add-data?hl=es&authuser=0#add_a_document
+            const cliente={
+                nombre: req.body.nombre,
+                apellidos: req.body.apellidos,
+                cuenta: {
+                    email: req.body.email,
+                    login:req.body.login,
+                    ImagenBASE64:''
+                },
+                telefono: req.body.telefono,
+                direcciones:[],
+                pedidos:[]
+
+            }
+            let _clienteRef=await addDoc(collection(db,'clientes'),cliente);
+            console.log('ref.al documento insertado en coleccion clientes de firebase...', _clienteRef);
 
 
-  login: async (req, res, next)=>{
+            res.status(200).send(
+                {
+                    codigo: 0,
+                    mensaje: 'registro oks...',
+                    errores: null,
+                    datoscliente: _userCredential.user,
+                    token: await _userCredential.user.getIdToken(),
+                    otrosdatos: null                    
+                }
+            );
+        } catch (error) {
+            console.log('error en el registro....', error);
+            res.status(400).send(
+                                    {
+                                        codigo: 1,
+                                        mensaje:'registro fallido',
+                                        error: error.message,
+                                        datoscliente:null,
+                                        token:null,
+                                        otrosdatos:null
+                                    }
+                                );           
+        }
+    },
+    comprobarEmail: async (req,res,next)=>{
+        try{
+            console.log('Datos recibidos desde el cliente de Angular', req.query);
+            let _clienteSnapshot = await getDocs(query(collection(db, 'clientes'),where('cuenta.email','==',req.query.email)));
+            console.log('Resultado de la query de clientes: ', _clienteSnapshot.docs);
+            if (_clienteSnapshot.docs.length==0) throw new Error('email incorrecto');
+            let _datoscliente = _clienteSnapshot.docs.shift().data();
+            console.log('Resultado de la query de clientes: ', _datoscliente);
+            if(_datoscliente){
+              res.status(200).send({
+                codigo: 0,
+                mensaje: "email correcto",
+                datoscliente: _datoscliente,
+                tokensesion: null,
+                otrodatos: null,
+              });
+            }else{
+              throw new Error('email incorrecto');
+            }
+          }catch(error){
+            console.log('error al comprobar el email', error);
+            res.status(400).send({
+              codigo: 1,
+              mensaje: "error a la hora de comprobar el email",
+              error: error.message,
+              datoscliente:null,
+              tokensesion:null,
+              otrodatos:null
+            });
+          }
 
-    try {
-      let _userCredentials=await signInWithEmailAndPassword(auth,req.body.email,req.body.password);
-      console.log('resultado de login: ',_userCredentials);
+    },
+    activarCuenta: async  (req,res,next)=>{
+        try {
+            let { mod,cod,key}=req.query;
+            //1º comprobar si el token de activacion de la cuenta es para verificar-email o no 
+            // lo ideal tb seria comprobar q el token enviado pertenece al usuario q quiere activar la cuenta (su email)
+            let _actionCodeInfo=await checkActionCode(auth,cod); //<---objeto clase ActionCodeInfo
+            console.log('actioncodeinfo en activar cuenta usuario firebase....', _actionCodeInfo);
+    
+            if(_actionCodeInfo.operation=='VERIFY_EMAIL'){
+                //en _actionCodeInfo.data <--- email, comprobar si exite en clientes...
+                await applyActionCode(auth,cod);
+                res.status(200).send(
+                    {
+                        codigo: 0,
+                        mensaje:'activacion cuenta oks',
+                        error: null,
+                        datoscliente:null,
+                        token:null,
+                        otrosdatos:null
+                    }
+                );                   
 
-      //recuperar de firestore de la colecccion clientes los datos del cliente asociado al email de la cuenta
-      //y almacenar el jwt q firebase a orginado por nosotros
+            }else {
+                throw new Error('token no valido para verificar EMAIL...');
+            }
+                
+        } catch (error) {
+            console.log('error en activacion cuenta usuario....', error);
+            res.status(400).send(
+                                    {
+                                        codigo: 1,
+                                        mensaje:'activacion cuenta fallida',
+                                        error: error.message,
+                                        datoscliente:null,
+                                        token:null,
+                                        otrosdatos:null
+                                    }
+                                );             
+        }
 
-      let _clienteSnapShot=await getDocs(query(collection(db,'clientes'),where('cuenta.email','==',req.body.email)));
-
-      let _datosCliente=_clienteSnapShot.docs[0].data();
-
-      res.status(200).send({
-        codigo:0,
-        mensaje:"login correcto",
-        error:null,
-        datoscliente:_datosCliente,
-        token:await _userCredentials.user.refreshToken,
-        otrosdatos:null
-
-      });
-
-    } catch (error) {
-      console.log('error en login: ',error);
-      res.status(401).send({
-        codigo:1,
-        mensaje:"login incorrecto",
-        error:error,
-        datoscliente:null,
-        token:null,
-        otrosdatos:null
-
-      });
     }
-
-  },
-  registro: async (req,res,next)=>{ 
-
-    try {
-      let {cuenta, ...restocliente}=req.body;
-      let _userCredentials=await createUserWithEmailAndPassword(auth,cuenta.email,cuenta.password);
-      await sendEmailVerification(_userCredentials.user);
-
-      //almacenar en firestore los datos del cliente
-      //https://firebase.google.com/docs/firestore/manage-data/add-data?hl=es&authuser=0#add_a_document
-      let _clienteRef=doc(db,'clientes',_userCredentials.user.uid);
-      await setDoc(_clienteRef,{...restocliente,cuenta:{...cuenta,uid:_userCredentials.user.uid}});
-      console.log('registro correcto: ',_userCredentials);
-
-      res.status(200).send({
-
-        codigo:0,
-        mensaje:"registro correcto",
-        error:null,
-        datoscliente:null,
-        token:await _userCredentials.user.refreshToken,
-        otrosdatos:null
-      });
-    } catch (error) {
-      res.status(401).send({
-        codigo:1,
-        mensaje:"registro incorrecto",
-        error:error,
-        datoscliente:null,
-        token:null,
-        otrosdatos:null
-      });
-    }
-
-  }
-} 
+}

@@ -16,7 +16,7 @@ module.exports=function(servExp){
     servExp.use( cookieParser() );
     servExp.use( bodyParser.json() );
     servExp.use( bodyParser.urlencoded( { extended:true } ) ); 
-    servExp.use(cors({  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']}));
+    servExp.use(cors());
 
     /*middleware propios:
     - enrutamiento <---- rutas o endpoints del servicio REST(FULL) montado en el servidor express, siempre devuelven datos formato JSON
