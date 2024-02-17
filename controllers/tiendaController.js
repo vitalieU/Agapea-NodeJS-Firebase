@@ -33,6 +33,7 @@ module.exports = {
     },
     recuperarMunicipios: async (req,res,next)=>{
         try {
+
             let _codpro=req.query.codpro;
 
             let _resp=await axios.get(`https://apiv1.geoapi.es/municipios?CPRO=${_codpro}&type=JSON&key=${process.env.GEOAPI_KEY}&sandbox=0`);
@@ -47,6 +48,7 @@ module.exports = {
 
             console.log('municipios recuperados...', _munis);
             */
+           res.status(200).send(_munis);
            
 
         } catch (error) {

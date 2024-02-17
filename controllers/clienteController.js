@@ -4,6 +4,7 @@ const {initializeApp}=require('firebase/app');
 //no meter el json aqui en fichero de codigo fuente como dice la doc...
 const app = initializeApp(JSON.parse(process.env.FIREBASE_CONFIG));
 
+
 //------------ CONFIGURACION ACCESO:  FIREBASE-AUTHENTICATION -------------
 const {getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, checkActionCode, applyActionCode}=require('firebase/auth');
 
@@ -34,13 +35,13 @@ module.exports={
                 
             let _datoscliente=_clienteSnapShot.docs.shift().data();
             console.log('datos del clietne recuperados...', _datoscliente);
-
+            req.session.jwt=await _userCredential.user.getIdToken();
             res.status(200).send(
                 {
                     codigo: 0,
                     mensaje: 'login oks...',
                     errores: null,
-                    datoscliente: _datoscliente,
+                    datosCliente: _datoscliente,
                     token: await _userCredential.user.getIdToken(),
                     otrosdatos: null
                 }
@@ -97,7 +98,7 @@ module.exports={
                     codigo: 0,
                     mensaje: 'registro oks...',
                     errores: null,
-                    datoscliente: _userCredential.user,
+                    datosCliente: _userCredential.user,
                     token: await _userCredential.user.getIdToken(),
                     otrosdatos: null                    
                 }
@@ -128,7 +129,7 @@ module.exports={
               res.status(200).send({
                 codigo: 0,
                 mensaje: "email correcto",
-                datoscliente: _datoscliente,
+                datosCliente: _datoscliente,
                 tokensesion: null,
                 otrodatos: null,
               });
@@ -141,7 +142,7 @@ module.exports={
               codigo: 1,
               mensaje: "error a la hora de comprobar el email",
               error: error.message,
-              datoscliente:null,
+              datosCliente:null,
               tokensesion:null,
               otrodatos:null
             });
@@ -164,7 +165,7 @@ module.exports={
                         codigo: 0,
                         mensaje:'activacion cuenta oks',
                         error: null,
-                        datoscliente:null,
+                        datosCliente:null,
                         token:null,
                         otrosdatos:null
                     }
@@ -181,12 +182,55 @@ module.exports={
                                         codigo: 1,
                                         mensaje:'activacion cuenta fallida',
                                         error: error.message,
-                                        datoscliente:null,
+                                        datosCliente:null,
                                         token:null,
                                         otrosdatos:null
                                     }
                                 );             
         }
 
+    },
+
+    uploadImage: async (req, res, next)=>{
+    try {
+        //tengo q coger la extension del fichero, en req.body.imagen:  data:image/jpeg
+        let _nombrefichero='imagen____' + req.body.emailcliente;//  + '.' + req.body.imagen.split(';')[0].split('/')[1]   ;
+        console.log('nombre del fichero a guardar en STORGE...',_nombrefichero);
+        let _result=await uploadString(ref(storage,`imagenes/${_nombrefichero}`), req.body.imagen,'data_url'); //objeto respuesta subida UploadResult         
+    
+        //podrias meter en coleccion clientes de firebase-database en prop. credenciales en prop. imagenAvatar
+        //el nombre del fichero y en imagenAvatarBASE&$ el contenido de la imagen...
+        let _refcliente=await getDocs(query(collection(db,'clientes'),where('cuenta.email','==',req.body.emailcliente)));
+        _refcliente.forEach( async (result) => { 
+            await updateDoc(result.ref, { 'cuenta.imagenAvatarBASE64': req.body.imagen } );
+        });
+        
+        res.status(200).send(
+            {
+                codigo: 0,
+                mensaje: 'subida imagen oks...',
+                errores: null,
+                datosCliente: null,
+                token: null,
+                otrosdatos: null
+            }
+        );
+    } catch (error) {
+        console.log('error subida imagen...',error);
+        res.status(400).send(
+                                {
+                                    codigo: 1,
+                                    mensaje:'subida imagen fallida',
+                                    error: error.message,
+                                    datosCliente:null,
+                                    token:null,
+                                    otrosdatos:null
+                                }
+                            );
+
+    }
+    },
+    finalizarPedido: async (req, res, next)=>{
+        
     }
 }

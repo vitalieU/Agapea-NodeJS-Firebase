@@ -8,7 +8,4 @@ router.get('/RecuperarProvincias', tiendaController.recuperarProvincias);
 router.get('/RecuperarMunicipios', tiendaController.recuperarMunicipios);
 
 
-
-
-
 module.exports = router;

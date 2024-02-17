@@ -1,6 +1,7 @@
 //modulo de codigo nodejs q exporta una funcion q recibe como parametro la instancia del servidor express
 //creado en el modulo principal y sobre el mismo configuramos los middleware de la pipeline del server
 const cookieParser=require('cookie-parser');
+const session = require('express-session');
 const bodyParser=require('body-parser');
 const cors=require('cors');
 
@@ -16,6 +17,12 @@ module.exports=function(servExp){
     servExp.use( cookieParser() );
     servExp.use( bodyParser.json() );
     servExp.use( bodyParser.urlencoded( { extended:true } ) ); 
+    servExp.use( session({
+        secret: 'yo k se tio xdxd 1234',
+        resave: true,
+        saveUninitialized: true,
+        cookie:{secure: true,maxAge: 365000 * 1000}
+      }))
     servExp.use(cors());
 
     /*middleware propios:

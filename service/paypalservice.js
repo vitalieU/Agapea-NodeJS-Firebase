@@ -1,5 +1,17 @@
 const axios=require('axios');
-const PagosPayPal=require('../modelos/pagospaypal');
+//------------ CONFIGURACION ACCESO:  FIREBASE-AUTHENTICATION -------------
+const {initializeApp}=require('firebase/app');
+//OJO!! nombre variable donde se almacena la cuenta de acceso servicio firebase: FIREBASE_CONFIG (no admite cualquier nombre)
+//no meter el json aqui en fichero de codigo fuente como dice la doc...
+const app = initializeApp(JSON.parse(process.env.FIREBASE_CONFIG));
+const {getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, checkActionCode, applyActionCode}=require('firebase/auth');
+
+const auth=getAuth(app); //<--- servicio de acceso a firebase-authentication
+
+//------------ CONFIGURACION ACCESO:  FIREBASE-DATABASE -------------------
+const {getFirestore, getDocs, collection, where, query, addDoc, getDoc}=require('firebase/firestore');
+
+const db=getFirestore(app); //<---- servicio de acceso a todas las colecciones de la BD definida en firebase-database
 
 async function getAccessTokenPAYPAL(){
     //para obtener token de servicio en paypal debo pasar en base64 la combinacion "clientid:clientsecret"
@@ -33,11 +45,11 @@ async function getAccessTokenPAYPAL(){
 }
 
 module.exports={
-    crearPagoPayPal: async (idcliente, pedidoActual )=>{
+    crearPagoPayPal: async (pedido, email )=>{
         try {
             let _accessToken=await getAccessTokenPAYPAL();
             if (! _accessToken) throw new Error('no hay token de servicio de acceso a PayPal');
-
+/*
             let _order={
                 intent : "CAPTURE",
                 purchase_units: [
@@ -64,6 +76,35 @@ module.exports={
                     cancel_url: `http://localhost:3003/api/Pedido/PayPalCallback?idcli=${idcliente}&pedid=${pedidoActual._id}&Cancel=true`
                 }
             };
+
+}*/
+            let _order={
+                intent : "CAPTURE",
+                purchase_units: [
+                    {
+                        items: pedido.elementosPedido.map( elem => {
+                            return {
+                                name: elem.libroElemento.Titulo,
+                                quantity: elem.cantidadElemento.toString(),
+                                unit_amount: { currency_code: 'EUR', value: elem.libroElemento.Precio.toString() }
+                            }
+                        } ),
+                        amount: {
+                            currency_code: 'EUR',
+                            value: pedido.totalPedido.toString(),
+                            breakdown: {
+                                item_total: { currency_code: 'EUR', value: pedido.subTotalPedido.toString() },
+                                shipping:   { currency_code: 'EUR', value: pedido.gastosEnvio.toString() }
+                            }
+                        }
+                    }
+                ],
+                application_context: {
+                    return_url: `http://localhost:3003/api/Pedido/PayPalCallback?email=${email}&pedid=${pedido.idPedido}`,
+                    cancel_url: `http://localhost:3003/api/Pedido/PayPalCallback?email=${email}&pedid=${pedido.idPedido}&Cancel=true`
+                }
+            };
+            
 
             /*
                   cliente react                                 servicio nodejs                                  servidor paypal
@@ -96,8 +137,13 @@ module.exports={
             if (_respuesta.status===201) { //<----- OJO!!! revisar pq paypal a veces devuelve codigo 201 como correcto....
                     //en _respueta.data solo me interesa el ID-PAGO y prop. links q es un array de objetos { rel: ..., href: ... }
                     //el q tenga en .rel='approve'
-                    let _saveOrderId=await new PagosPayPal({ idpago:_respuesta.data.id , idcliente, idpedido: pedidoActual._id}).save();
-                    console.log('resultado del insert del id-pago paypal en mongodb....', _saveOrderId);
+                    //let _saveOrderId=await new PagosPayPal({ idpago:_respuesta.data.id , idcliente, idpedido: pedidoActual._id}).save();
+                    //console.log('resultado del insert del id-pago paypal en mongodb....', _saveOrderId);
+
+                    //añadir a firebase el id-pago de paypal, idcliente, idpedido
+                    let _docRef=await addDoc(collection(db, 'pagospaypal'), { idpago: _respuesta.data.id, email:email, idpedido: pedido.idPedido});
+                    console.log('id-pago paypal insertado en firebase...', _docRef.id);
+
 
                     return _respuesta.data.links.filter( link=>link.rel==='approve')[0].href;
                     
@@ -135,7 +181,9 @@ module.exports={
 
         } catch (error) {
             console.log('error al capturar pago por paypal y finalizarlo...', error);
-            return null;
+            return false;
         }
-    }
+    },
+
+    
 }
