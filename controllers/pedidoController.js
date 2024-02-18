@@ -24,11 +24,12 @@ const paypalService=require('../service/paypalservice');
 module.exports={
     finalizarPedido: async (req, res)=>{
         try{
-           const{pedido, email,jwt}=req.body;
-
+           const{pedido, email}=req.body;
+           const jwt =req.headers.authorization.split('Bearer ')[1];
            //comporbar si el jwt de firebase es valido
-            //const user = await admin.auth().verifyIdToken(jwt);
-            //if (!user) throw new Error('usuario no autenticado');
+            const user = await (await admin.auth().verifyIdToken(jwt)).uid;
+            
+            if (!user) throw new Error('usuario no autenticado');
             //añadir pedido en el array de pedidos de cliente segun el id del cliente
             const _clienteSnapshot = await getDocs(query(collection(db, 'clientes'),where('cuenta.email','==',email)));
             if (_clienteSnapshot.empty) throw new Error('cliente no encontrado');
@@ -92,7 +93,7 @@ module.exports={
             cliente.pedidos.filter(pedido=>pedido.idPedido===pedid).estado='pagado';
             await setDoc(doc(db, 'clientes', clienteSnapshot.docs[0].id), cliente);
 
-            res.status(200).redirect('http://localhost:4200/Tienda/FinalizarPedidoOK'); 
+            res.status(200).redirect('http://localhost:4200/Tienda/PedidoFinalizado'); 
 
         } catch (error) {
             res.status(200).redirect('http://localhost:4200/Cliente/Login');

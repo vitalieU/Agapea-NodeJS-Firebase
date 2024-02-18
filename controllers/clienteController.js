@@ -1,9 +1,9 @@
 //para inicializar firebase:  https://firebase.google.com/docs/web/setup?authuser=0&hl=es#add-sdks-initialize
 const {initializeApp}=require('firebase/app');
+const admin = require('firebase-admin');
 //OJO!! nombre variable donde se almacena la cuenta de acceso servicio firebase: FIREBASE_CONFIG (no admite cualquier nombre)
 //no meter el json aqui en fichero de codigo fuente como dice la doc...
 const app = initializeApp(JSON.parse(process.env.FIREBASE_CONFIG));
-
 
 //------------ CONFIGURACION ACCESO:  FIREBASE-AUTHENTICATION -------------
 const {getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, checkActionCode, applyActionCode}=require('firebase/auth');

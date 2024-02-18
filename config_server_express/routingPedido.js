@@ -8,4 +8,5 @@ const storage = getStorage();
 
 router.post('/FinalizarPedido', pedidoController.finalizarPedido);
 router.get('/PayPalCallback', pedidoController.payPalCallback);
+router.post('/RecuperarCliente', pedidoController.obtenerDatosCliente);
 module.exports=router;
